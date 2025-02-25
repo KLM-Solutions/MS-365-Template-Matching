@@ -423,7 +423,7 @@ def main():
         
         # Content input with simple example placeholder
         content = st.text_area("Paste your content here for analysis", height=300,
-                              placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..(only paste this data) no extra\n  ..\n}\nLink to 365")
+                              placeholder="In m365-alerts Slack channel\n\nEXAMPLE : \n\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810(DON'T PASTE)\n{\n  ..\n  ..(only paste this data) {This to This} \n  ..\n}\nLink to 365")
         
         if st.button("Analyze Content"):
             if content:
