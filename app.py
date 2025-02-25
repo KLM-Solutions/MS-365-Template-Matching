@@ -416,18 +416,17 @@ def main():
     # Create tabs for different sections
     tab1 = st.empty()
     
-    # Tab 1: Content Analysis
-    with tab1:
-        st.header("Content Analysis")
-        st.write("Paste your content below to find the best matching template from Pinecone.")
-        
-        # Content input with simple example placeholder
-        content = st.text_area("Paste your content here for analysis", height=300,
-                              placeholder="In m365-alerts Slack channel\n\nEXAMPLE : \n\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810(DON'T PASTE)\n{\n  ..\n  ..(only paste this data) {This to This} \n  ..\n}\nLink to 365")
-        
-        if st.button("Analyze Content"):
-            if content:
-                with st.spinner("Analyzing content..."):
+    # Content Analysis
+    st.header("Content Analysis")
+    
+    # Content input with simple example placeholder - placed before the button
+    content = st.text_area("Paste your content here for analysis", height=300,
+                         placeholder="In m365-alerts Slack channel\n\nEXAMPLE : \n\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810(DON'T PASTE)\n{\n  ..\n  ..(only paste this data) {This to This} \n  ..\n}\nLink to 365")
+    
+    # Analyze button
+    if st.button("Analyze Content"):
+        if content:
+            with st.spinner("Analyzing content..."):
                     # Extract and display the relevant portion (optional - for debugging)
                     relevant_content = extract_relevant_content(content)
                     with st.expander("Relevant Content Being Analyzed"):
