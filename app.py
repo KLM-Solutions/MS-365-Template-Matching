@@ -54,7 +54,28 @@ def get_embedding(text):
     return response.data[0].embedding
 
 # Function to analyze content with OpenAI LLM
+def extract_relevant_content(full_content):
+    """
+    Extract the relevant portion of the alert content - the description between DU number and Link to 365
+    """
+    try:
+        # Look for pattern "DU = <number>" followed by alert content
+        du_match = re.search(r'DU\s*=\s*\d+(.+?)(?:Link to 365|This user has)', full_content, re.DOTALL)
+        
+        if du_match:
+            # Extract the text between DU and Link to 365
+            return du_match.group(1).strip()
+        else:
+            # If pattern not found, return the original content
+            return full_content
+    except Exception as e:
+        st.error(f"Error extracting relevant content: {str(e)}")
+        return full_content
+
 def analyze_with_llm(content, templates):
+    # Extract the relevant portion of the content
+    relevant_content = extract_relevant_content(content)
+    
     # Prepare a list of template titles and IDs for the LLM
     template_info = []
     for template in templates:
@@ -74,7 +95,7 @@ def analyze_with_llm(content, templates):
     # Create a user prompt with the content and template information
     user_prompt = f"""
     Content to analyze:
-    {content}
+    {relevant_content}
     
     Available templates:
     {json.dumps(template_info, indent=2)}
@@ -297,8 +318,11 @@ def parse_template_content(content, file_type):
 # Function to query Pinecone for similar content
 def query_pinecone(index, content):
     try:
+        # Extract relevant content for analysis
+        relevant_content = extract_relevant_content(content)
+        
         # Convert content to vector
-        vector = get_embedding(content)
+        vector = get_embedding(relevant_content)
         
         # Query Pinecone with the new client
         results = index.query(
@@ -397,13 +421,18 @@ def main():
         st.header("Content Analysis")
         st.write("Paste your content below to find the best matching template from Pinecone.")
         
-        # Content input with example placeholder
+        # Content input with simple example placeholder
         content = st.text_area("Paste your content here for analysis", height=300,
-                              placeholder="In m365-alerts Slack channel\n\nEXAMPLE : \n\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810(DON'T PASTE)\n{\n  ..\n  ..(only paste this data) \n  ..\n}\nLink to 365")
+                              placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..(only paste this data) no extra\n  ..\n}\nLink to 365")
         
         if st.button("Analyze Content"):
             if content:
                 with st.spinner("Analyzing content..."):
+                    # Extract and display the relevant portion (optional - for debugging)
+                    relevant_content = extract_relevant_content(content)
+                    with st.expander("Relevant Content Being Analyzed"):
+                        st.text(relevant_content)
+                    
                     # First approach: Query Pinecone for similar content using vector similarity
                     pinecone_results = query_pinecone(index, content)
                     
