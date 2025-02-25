@@ -232,12 +232,10 @@ def main():
         st.error(f"Error initializing Pinecone: {str(e)}")
         return
     
-    # Content Analysis
-    st.header("Content Analysis")
     
     # Content input with simple example placeholder - placed before the button
-    content = st.text_area("Paste your content here for analysis", height=300,
-                         placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..(only paste this data) no extra\n  ..\n}\nLink to 365")
+    content = st.text_area("Paste your content here for analysis : (Pasting Content #m365-alerts Slack channel)", height=300,
+                         placeholder="Example : \nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..\n  ..\n}\nLink to 365")
     
     # Analyze button
     if st.button("Analyze Content"):
