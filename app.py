@@ -414,7 +414,7 @@ def main():
         return
     
     # Create tabs for different sections
-    tab1, tab2 = st.tabs(["Content Analysis", "Template Management"])
+    tab1 = st.empty()
     
     # Tab 1: Content Analysis
     with tab1:
@@ -536,83 +536,6 @@ def main():
                         st.error("No matching templates found.")
             else:
                 st.warning("Please enter content for analysis.")
-    
-    # Tab 2: Template Management
-    with tab2:
-        st.header("Template Management")
-        
-        # File upload option
-        st.subheader("Upload Templates File")
-        uploaded_file = st.file_uploader("Upload templates file", type=["py", "txt", "json"])
-        
-        if uploaded_file is not None:
-            file_content = uploaded_file.getvalue().decode("utf-8")
-            file_extension = uploaded_file.name.split(".")[-1].lower()
-            
-            # Parse the templates from the file based on its type
-            templates = parse_template_content(file_content, file_extension)
-            
-            if templates and (isinstance(templates, list) or isinstance(templates, dict)):
-                # Count templates properly
-                if isinstance(templates, list):
-                    template_count = len(templates)
-                    preview_templates = templates[:min(3, len(templates))]
-                else:
-                    template_count = 1
-                    preview_templates = [templates]
-                
-                st.success(f"Successfully loaded {template_count} templates.")
-                
-                # Display template preview safely
-                with st.expander("Preview Templates"):
-                    st.write(f"First few templates ({min(3, template_count)} of {template_count}):")
-                    for i, template in enumerate(preview_templates):
-                        if isinstance(template, dict):
-                            st.markdown(f"**Template {i+1}**")
-                            st.markdown(f"- **Title:** {template.get('title', 'No Title')}")
-                            st.markdown(f"- **ID:** {template.get('ID', 'No ID')}")
-                            st.markdown(f"- **Name:** {template.get('name', 'No Name')}")
-                        else:
-                            st.markdown(f"**Template {i+1}**: Invalid format")
-                
-                if st.button("Upsert All Templates to Pinecone"):
-                    with st.spinner("Upserting templates to Pinecone..."):
-                        success_count, error_count, errors = upsert_templates_to_pinecone(index, templates)
-                        
-                        if error_count == 0:
-                            st.success(f"Successfully upserted all {success_count} templates!")
-                        else:
-                            st.warning(f"Upserted {success_count} templates, but encountered {error_count} errors.")
-                            with st.expander("View Errors"):
-                                for error in errors:
-                                    st.error(error)
-            else:
-                st.error("No templates found in the uploaded file or could not parse the file.")
-        
-        # Manual template input
-        st.subheader("Manual Template Upsert")
-        
-        with st.expander("Add Single Template"):
-            template_data = st.text_area("Enter template data in JSON format", height=200)
-            
-            if st.button("Upsert Single Template"):
-                if template_data:
-                    try:
-                        # Special handling for single template key-value pair
-                        if template_data.strip().startswith('"template"'):
-                            template_data = "{" + template_data.strip() + "}"
-                            
-                        data = json.loads(template_data)
-                        with st.spinner("Upserting template..."):
-                            success, message = upsert_to_pinecone(index, data)
-                            if success:
-                                st.success(message)
-                            else:
-                                st.error(message)
-                    except json.JSONDecodeError as e:
-                        st.error(f"Invalid JSON format: {str(e)}")
-                else:
-                    st.warning("Please enter template data before upserting.")
 
 # Run the app
 if __name__ == "__main__":
