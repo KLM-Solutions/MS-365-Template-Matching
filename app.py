@@ -45,15 +45,7 @@ def init_pinecone():
     index = pc.Index("ms365")
     return index
 
-# Function to get embedding from OpenAI
-def get_embedding(text):
-    response = client.embeddings.create(
-        input=text,
-        model="text-embedding-ada-002"  # From the image
-    )
-    return response.data[0].embedding
-
-# Function to analyze content with OpenAI LLM
+# Function to extract relevant content from alerts
 def extract_relevant_content(full_content):
     """
     Extract the relevant portion of the alert content - the description between DU number and Link to 365
@@ -72,6 +64,15 @@ def extract_relevant_content(full_content):
         st.error(f"Error extracting relevant content: {str(e)}")
         return full_content
 
+# Function to get embedding from OpenAI
+def get_embedding(text):
+    response = client.embeddings.create(
+        input=text,
+        model="text-embedding-ada-002"
+    )
+    return response.data[0].embedding
+
+# Function to analyze content with OpenAI LLM
 def analyze_with_llm(content, templates):
     # Extract the relevant portion of the content
     relevant_content = extract_relevant_content(content)
@@ -132,188 +133,6 @@ def analyze_with_llm(content, templates):
     except Exception as e:
         st.error(f"Error analyzing content with LLM: {str(e)}")
         return None
-
-# Function to upsert a single template to Pinecone
-def upsert_to_pinecone(index, data):
-    try:
-        # Make sure ID is present and valid
-        if "ID" not in data:
-            return False, "Template is missing ID field"
-        
-        # Make sure title is present
-        if "title" not in data or not data["title"]:
-            return False, "Template is missing title field"
-        
-        # Convert template to vector
-        template_text = data.get("template", "") + data.get("title", "")
-        vector = get_embedding(template_text)
-        
-        # Prepare the record for the new Pinecone client
-        record = {
-            "id": str(data.get("ID")),
-            "values": vector,
-            "metadata": {
-                "name": data.get("name", ""),
-                "title": data.get("title", ""),
-                "kind": data.get("kind", ""),
-                "active": data.get("active", False),
-                "template": data.get("template", "")  # Store the full template text in metadata
-            }
-        }
-        
-        # Upsert to Pinecone with new client
-        index.upsert(vectors=[record])
-        return True, "Data successfully upserted to Pinecone!"
-    except Exception as e:
-        return False, f"Error upserting data: {str(e)}"
-
-# Function to upsert multiple templates to Pinecone
-def upsert_templates_to_pinecone(index, templates):
-    success_count = 0
-    error_count = 0
-    errors = []
-    
-    # Create a progress bar
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    # Handling different template formats
-    if isinstance(templates, dict) and "templates" in templates:
-        # If templates is a dict with a "templates" key
-        templates_list = templates["templates"]
-    elif isinstance(templates, list):
-        # If templates is already a list
-        templates_list = templates
-    else:
-        # Try to convert to list if possible
-        try:
-            templates_list = list(templates)
-        except:
-            st.error("Invalid templates format. Please provide a list of template objects.")
-            return 0, 1, ["Invalid templates format"]
-    
-    total_templates = len(templates_list)
-    st.info(f"Preparing to upsert {total_templates} templates")
-    
-    # Process in batches to avoid overwhelming the API
-    batch_size = 10
-    
-    for i in range(0, total_templates, batch_size):
-        # Get current batch
-        batch = templates_list[i:min(i+batch_size, total_templates)]
-        
-        for j, template in enumerate(batch):
-            try:
-                # Update progress
-                current_idx = i + j
-                progress = (current_idx + 1) / total_templates
-                progress_bar.progress(progress)
-                status_text.text(f"Processing template {current_idx+1}/{total_templates}...")
-                
-                # Check template format
-                if not isinstance(template, dict):
-                    error_count += 1
-                    errors.append(f"Template at index {current_idx} is not a valid dictionary")
-                    continue
-                
-                success, message = upsert_to_pinecone(index, template)
-                if success:
-                    success_count += 1
-                else:
-                    error_count += 1
-                    errors.append(f"Template ID {template.get('ID', 'Unknown')}: {message}")
-            except Exception as e:
-                error_count += 1
-                errors.append(f"Template at index {current_idx}: {str(e)}")
-        
-        # Small delay between batches to avoid rate limiting
-        sleep(1)
-    
-    # Update the final status
-    progress_bar.progress(1.0)
-    status_text.text(f"Completed processing {total_templates} templates")
-    
-    return success_count, error_count, errors
-
-# Function to parse template file content based on file type
-def parse_template_content(content, file_type):
-    try:
-        if file_type == "json":
-            # For JSON files, directly parse the JSON
-            parsed_content = json.loads(content)
-            
-            # Check if it's an array or an object with a templates key
-            if isinstance(parsed_content, list):
-                return parsed_content
-            elif isinstance(parsed_content, dict) and "templates" in parsed_content:
-                return parsed_content["templates"]
-            else:
-                # Try to find any array in the JSON that might be templates
-                for key, value in parsed_content.items():
-                    if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-                        return value
-                st.warning("JSON structure not recognized. Please make sure it contains an array of templates.")
-                return []
-        else:
-            # For Python/txt files
-            # First, try to find a templates list variable
-            match = re.search(r'templates\s*=\s*(\[.*?\])', content, re.DOTALL)
-            if match:
-                template_str = match.group(1)
-                # Clean up the string to make it valid JSON
-                template_str = re.sub(r'\bNone\b', 'null', template_str)
-                template_str = re.sub(r'#.*$', '', template_str, flags=re.MULTILINE)
-                template_str = re.sub(r'\bTrue\b', 'true', template_str)
-                template_str = re.sub(r'\bFalse\b', 'false', template_str)
-                # Fix any remaining Python syntax that's not valid JSON
-                template_str = re.sub(r',$\s*\]', ']', template_str, flags=re.MULTILINE)  # Remove trailing commas
-                
-                try:
-                    # Try to parse as JSON first
-                    return json.loads(template_str)
-                except json.JSONDecodeError:
-                    try:
-                        # If that fails, try ast.literal_eval
-                        return ast.literal_eval(match.group(1))
-                    except:
-                        st.error("Could not parse the templates list. The format may be invalid.")
-                        return []
-            else:
-                # If no templates list is found, try to find any list of dictionaries
-                pattern = r'\[\s*\{\s*"[^"]+"\s*:.*?\}\s*\]'
-                match = re.search(pattern, content, re.DOTALL)
-                if match:
-                    try:
-                        template_str = match.group(0)
-                        template_str = re.sub(r'\bNone\b', 'null', template_str)
-                        template_str = re.sub(r'#.*$', '', template_str, flags=re.MULTILINE)
-                        template_str = re.sub(r'\bTrue\b', 'true', template_str)
-                        template_str = re.sub(r'\bFalse\b', 'false', template_str)
-                        return json.loads(template_str)
-                    except:
-                        st.error("Found a potential templates list but could not parse it.")
-                        return []
-                else:
-                    # Try to see if there's a single template object in the text
-                    try:
-                        # Check if this is just a single template (not in a list)
-                        if content.strip().startswith('"template"'):
-                            # Wrap it in curly braces if it's just a key-value pair
-                            content_fixed = "{" + content.strip() + "}"
-                            template_obj = json.loads(content_fixed)
-                            return [template_obj]
-                        elif content.strip().startswith('{') and content.strip().endswith('}'):
-                            # It's already a JSON object
-                            template_obj = json.loads(content.strip())
-                            return [template_obj]
-                    except:
-                        pass
-                        
-                    st.error("Could not find a templates list or valid template in the file.")
-                    return []
-    except Exception as e:
-        st.error(f"Error parsing template content: {str(e)}")
-        return []
 
 # Function to query Pinecone for similar content
 def query_pinecone(index, content):
@@ -413,128 +232,125 @@ def main():
         st.error(f"Error initializing Pinecone: {str(e)}")
         return
     
-    # Create tabs for different sections
-    tab1 = st.empty()
-    
     # Content Analysis
     st.header("Content Analysis")
     
     # Content input with simple example placeholder - placed before the button
     content = st.text_area("Paste your content here for analysis", height=300,
-                         placeholder="In m365-alerts Slack channel\n\nEXAMPLE : \n\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810(DON'T PASTE)\n{\n  ..\n  ..(only paste this data) {This to This} \n  ..\n}\nLink to 365")
+                         placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..(only paste this data) no extra\n  ..\n}\nLink to 365")
     
     # Analyze button
     if st.button("Analyze Content"):
         if content:
             with st.spinner("Analyzing content..."):
-                    # Extract and display the relevant portion (optional - for debugging)
-                    relevant_content = extract_relevant_content(content)
-                    with st.expander("Relevant Content Being Analyzed"):
-                        st.text(relevant_content)
+                # Extract and display the relevant portion (optional - for debugging)
+                relevant_content = extract_relevant_content(content)
+                with st.expander("Relevant Content Being Analyzed"):
+                    st.text(relevant_content)
+                
+                # First approach: Query Pinecone for similar content using vector similarity
+                pinecone_results = query_pinecone(index, content)
+                
+                # Second approach: Use LLM to analyze content and find matching template
+                # Get all templates from Pinecone for LLM analysis
+                all_templates = get_all_templates_from_pinecone(index)
+                
+                if all_templates:
+                    llm_template_id = analyze_with_llm(content, all_templates)
                     
-                    # First approach: Query Pinecone for similar content using vector similarity
-                    pinecone_results = query_pinecone(index, content)
-                    
-                    # Second approach: Use LLM to analyze content and find matching template
-                    # Get all templates from Pinecone for LLM analysis
-                    all_templates = get_all_templates_from_pinecone(index)
-                    
-                    if all_templates:
-                        llm_template_id = analyze_with_llm(content, all_templates)
+                    # Find the template with the matching ID from LLM analysis
+                    llm_matching_template = None
+                    for template in all_templates:
+                        if str(template.get("ID")) == str(llm_template_id):
+                            llm_matching_template = template
+                            break
+                else:
+                    llm_matching_template = None
+                    llm_template_id = None
+                
+                # Display results
+                col1, col2 = st.columns(2)
+                
+                # Display vector similarity results
+                with col1:
+                    st.subheader("Vector Similarity Results")
+                    if pinecone_results and hasattr(pinecone_results, 'matches') and pinecone_results.matches:
+                        # Get the top match
+                        top_match = pinecone_results.matches[0]
                         
-                        # Find the template with the matching ID from LLM analysis
-                        llm_matching_template = None
-                        for template in all_templates:
-                            if str(template.get("ID")) == str(llm_template_id):
-                                llm_matching_template = template
-                                break
-                    else:
-                        llm_matching_template = None
-                        llm_template_id = None
-                    
-                    # Display results
-                    col1, col2 = st.columns(2)
-                    
-                    # Display vector similarity results
-                    with col1:
-                        st.subheader("Vector Similarity Results")
-                        if pinecone_results and hasattr(pinecone_results, 'matches') and pinecone_results.matches:
-                            # Get the top match
-                            top_match = pinecone_results.matches[0]
-                            
-                            st.success(f"Top Match: {top_match.metadata.get('title')}")
-                            
-                            # Display template details
-                            st.markdown(f"**ID:** {top_match.id}")
-                            st.markdown(f"**Similarity Score:** {top_match.score:.4f}")
-                            
-                            # Show all matches in an expander
-                            with st.expander("View All Similar Templates"):
-                                for i, match in enumerate(pinecone_results.matches):
-                                    st.markdown(f"**Match {i+1}:** {match.metadata.get('title')} (Score: {match.score:.4f})")
-                        else:
-                            st.warning("No matching templates found via vector similarity.")
-                    
-                    # Display LLM analysis results
-                    with col2:
-                        st.subheader("LLM Analysis Results")
-                        if llm_matching_template:
-                            st.success(f"Top Match: {llm_matching_template.get('title')}")
-                            
-                            # Display template details
-                            st.markdown(f"**ID:** {llm_matching_template.get('ID')}")
-                            st.markdown(f"**Kind:** {llm_matching_template.get('kind')}")
-                        else:
-                            st.warning("No matching templates found via LLM analysis.")
-                    
-                    # Show the final recommendation
-                    st.subheader("Final Recommendation")
-                    
-                    # Determine which method to trust more (you can customize this logic)
-                    has_vector_match = (pinecone_results and hasattr(pinecone_results, 'matches') and 
-                                       len(pinecone_results.matches) > 0)
-                    
-                    if has_vector_match and pinecone_results.matches[0].score > 0.8:
-                        # If vector similarity is very high, trust that
-                        final_match = {
-                            "id": pinecone_results.matches[0].id,
-                            "title": pinecone_results.matches[0].metadata.get('title'),
-                            "method": "Vector Similarity (High Confidence)",
-                            "template_content": pinecone_results.matches[0].metadata.get('template', '')
-                        }
-                    elif llm_matching_template:
-                        # Otherwise trust the LLM if it found something
-                        final_match = {
-                            "id": llm_matching_template.get('ID'),
-                            "title": llm_matching_template.get('title'),
-                            "method": "LLM Analysis",
-                            "template_content": llm_matching_template.get('template', '')
-                        }
-                    elif has_vector_match:
-                        # Fall back to vector similarity
-                        final_match = {
-                            "id": pinecone_results.matches[0].id,
-                            "title": pinecone_results.matches[0].metadata.get('title'),
-                            "method": "Vector Similarity (Lower Confidence)",
-                            "template_content": pinecone_results.matches[0].metadata.get('template', '')
-                        }
-                    else:
-                        final_match = None
-                    
-                    if final_match:
-                        st.success(f"Best Matching Template: {final_match['title']}")
-                        st.markdown(f"**Template ID:** {final_match['id']}")
-                        st.markdown(f"**Method:** {final_match['method']}")
+                        st.success(f"Top Match: {top_match.metadata.get('title')}")
                         
-                        # Display the template content as requested
-                        if final_match.get('template_content'):
-                            display_template_content(final_match['template_content'])
-                        else:
-                            st.warning("Template content not available for display.")
+                        # Display template details
+                        st.markdown(f"**ID:** {top_match.id}")
+                        st.markdown(f"**Similarity Score:** {top_match.score:.4f}")
+                        
+                        # Show all matches in an expander
+                        with st.expander("View All Similar Templates"):
+                            for i, match in enumerate(pinecone_results.matches):
+                                st.markdown(f"**Match {i+1}:** {match.metadata.get('title')} (Score: {match.score:.4f})")
                     else:
-                        st.error("No matching templates found.")
-            else:
-                st.warning("Please enter content for analysis.")
+                        st.warning("No matching templates found via vector similarity.")
+                
+                # Display LLM analysis results
+                with col2:
+                    st.subheader("LLM Analysis Results")
+                    if llm_matching_template:
+                        st.success(f"Top Match: {llm_matching_template.get('title')}")
+                        
+                        # Display template details
+                        st.markdown(f"**ID:** {llm_matching_template.get('ID')}")
+                        st.markdown(f"**Kind:** {llm_matching_template.get('kind')}")
+                    else:
+                        st.warning("No matching templates found via LLM analysis.")
+                
+                # Show the final recommendation
+                st.subheader("Final Recommendation")
+                
+                # Determine which method to trust more (you can customize this logic)
+                has_vector_match = (pinecone_results and hasattr(pinecone_results, 'matches') and 
+                                   len(pinecone_results.matches) > 0)
+                
+                if has_vector_match and pinecone_results.matches[0].score > 0.8:
+                    # If vector similarity is very high, trust that
+                    final_match = {
+                        "id": pinecone_results.matches[0].id,
+                        "title": pinecone_results.matches[0].metadata.get('title'),
+                        "method": "Vector Similarity (High Confidence)",
+                        "template_content": pinecone_results.matches[0].metadata.get('template', '')
+                    }
+                elif llm_matching_template:
+                    # Otherwise trust the LLM if it found something
+                    final_match = {
+                        "id": llm_matching_template.get('ID'),
+                        "title": llm_matching_template.get('title'),
+                        "method": "LLM Analysis",
+                        "template_content": llm_matching_template.get('template', '')
+                    }
+                elif has_vector_match:
+                    # Fall back to vector similarity
+                    final_match = {
+                        "id": pinecone_results.matches[0].id,
+                        "title": pinecone_results.matches[0].metadata.get('title'),
+                        "method": "Vector Similarity (Lower Confidence)",
+                        "template_content": pinecone_results.matches[0].metadata.get('template', '')
+                    }
+                else:
+                    final_match = None
+                
+                if final_match:
+                    st.success(f"Best Matching Template: {final_match['title']}")
+                    st.markdown(f"**Template ID:** {final_match['id']}")
+                    st.markdown(f"**Method:** {final_match['method']}")
+                    
+                    # Display the template content as requested
+                    if final_match.get('template_content'):
+                        display_template_content(final_match['template_content'])
+                    else:
+                        st.warning("Template content not available for display.")
+                else:
+                    st.error("No matching templates found.")
+        else:
+            st.warning("Please enter content for analysis.")
 
 # Run the app
 if __name__ == "__main__":
