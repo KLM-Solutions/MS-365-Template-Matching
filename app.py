@@ -219,7 +219,7 @@ def check_environment_variables():
 
 # Main application
 def main():
-    st.title("MS365 Template Analysis Tool")
+    st.title("MS-365 Template_Matching")
     
     # Check if environment variables are set
     if not check_environment_variables():
