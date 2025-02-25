@@ -9,7 +9,7 @@ import re
 
 # Set page config
 st.set_page_config(
-    page_title="MS365 Template Analysis Tool",
+    page_title="MS365 Template Matching...",
     page_icon="📝",
     layout="wide"
 )
