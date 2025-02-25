@@ -232,7 +232,6 @@ def main():
         st.error(f"Error initializing Pinecone: {str(e)}")
         return
     
-    
     # Content input with simple example placeholder - placed before the button
     content = st.text_area("Paste your content here for analysis : (Pasting Content #m365-alerts Slack channel)", height=300,
                          placeholder="Example : \nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..\n  ..\n}\nLink to 365")
@@ -241,10 +240,8 @@ def main():
     if st.button("Analyze Content"):
         if content:
             with st.spinner("Analyzing content..."):
-                # Extract and display the relevant portion (optional - for debugging)
+                # Extract the relevant portion
                 relevant_content = extract_relevant_content(content)
-                with st.expander("Relevant Content Being Analyzed"):
-                    st.text(relevant_content)
                 
                 # First approach: Query Pinecone for similar content using vector similarity
                 pinecone_results = query_pinecone(index, content)
@@ -266,44 +263,6 @@ def main():
                     llm_matching_template = None
                     llm_template_id = None
                 
-                # Display results
-                col1, col2 = st.columns(2)
-                
-                # Display vector similarity results
-                with col1:
-                    st.subheader("Vector Similarity Results")
-                    if pinecone_results and hasattr(pinecone_results, 'matches') and pinecone_results.matches:
-                        # Get the top match
-                        top_match = pinecone_results.matches[0]
-                        
-                        st.success(f"Top Match: {top_match.metadata.get('title')}")
-                        
-                        # Display template details
-                        st.markdown(f"**ID:** {top_match.id}")
-                        st.markdown(f"**Similarity Score:** {top_match.score:.4f}")
-                        
-                        # Show all matches in an expander
-                        with st.expander("View All Similar Templates"):
-                            for i, match in enumerate(pinecone_results.matches):
-                                st.markdown(f"**Match {i+1}:** {match.metadata.get('title')} (Score: {match.score:.4f})")
-                    else:
-                        st.warning("No matching templates found via vector similarity.")
-                
-                # Display LLM analysis results
-                with col2:
-                    st.subheader("LLM Analysis Results")
-                    if llm_matching_template:
-                        st.success(f"Top Match: {llm_matching_template.get('title')}")
-                        
-                        # Display template details
-                        st.markdown(f"**ID:** {llm_matching_template.get('ID')}")
-                        st.markdown(f"**Kind:** {llm_matching_template.get('kind')}")
-                    else:
-                        st.warning("No matching templates found via LLM analysis.")
-                
-                # Show the final recommendation
-                st.subheader("Final Recommendation")
-                
                 # Determine which method to trust more (you can customize this logic)
                 has_vector_match = (pinecone_results and hasattr(pinecone_results, 'matches') and 
                                    len(pinecone_results.matches) > 0)
@@ -313,7 +272,7 @@ def main():
                     final_match = {
                         "id": pinecone_results.matches[0].id,
                         "title": pinecone_results.matches[0].metadata.get('title'),
-                        "method": "Vector Similarity (High Confidence)",
+                        "method": "Content Pattern Match",
                         "template_content": pinecone_results.matches[0].metadata.get('template', '')
                     }
                 elif llm_matching_template:
@@ -321,7 +280,7 @@ def main():
                     final_match = {
                         "id": llm_matching_template.get('ID'),
                         "title": llm_matching_template.get('title'),
-                        "method": "LLM Analysis",
+                        "method": "Semantic Analysis",
                         "template_content": llm_matching_template.get('template', '')
                     }
                 elif has_vector_match:
@@ -329,18 +288,32 @@ def main():
                     final_match = {
                         "id": pinecone_results.matches[0].id,
                         "title": pinecone_results.matches[0].metadata.get('title'),
-                        "method": "Vector Similarity (Lower Confidence)",
+                        "method": "Content Pattern Match",
                         "template_content": pinecone_results.matches[0].metadata.get('template', '')
                     }
                 else:
                     final_match = None
                 
+                # Display a simplified, focused result
+                st.subheader("Analysis Results")
+                
+                # Create three columns for a cleaner display
+                col1, col2 = st.columns(2)
+                
                 if final_match:
-                    st.success(f"Best Matching Template: {final_match['title']}")
-                    st.markdown(f"**Template ID:** {final_match['id']}")
-                    st.markdown(f"**Method:** {final_match['method']}")
+                    # Left column: Show template match details
+                    with col1:
+                        st.markdown("### Best Matching Template")
+                        st.markdown(f"**Title:** {final_match['title']}")
+                        st.markdown(f"**ID:** {final_match['id']}")
+                        st.markdown(f"**Analysis Method:** {final_match['method']}")
                     
-                    # Display the template content as requested
+                    # Right column: Show the extracted content
+                    with col2:
+                        st.markdown("### Analyzed Content")
+                        st.text_area("Relevant portion of the alert:", value=relevant_content, height=150, disabled=True)
+                    
+                    # Display the template content below the columns
                     if final_match.get('template_content'):
                         display_template_content(final_match['template_content'])
                     else:
