@@ -397,8 +397,31 @@ def main():
         st.header("Content Analysis")
         st.write("Paste your content below to find the best matching template from Pinecone.")
         
+        # Example format with highlighted styling
+        st.markdown("""
+        ### Example Format:
+        ```
+        In m365-alerts Slack channel
+        UNUSUAL SIGN IN (FOREIGN_COUNTRY)
+        DU = 1810
+        {
+          "userId": "john.doe@company.com",
+          "eventTime": "2025-02-25T08:30:15Z",
+          "country": "Belarus",
+          "ipAddress": "45.153.241.176",
+          "deviceType": "Windows 10",
+          "browser": "Chrome",
+          "status": "Successful",
+          "location": "Minsk",
+          "riskLevel": "High"
+        }
+        Link to 365
+        ```
+        """)
+        
         # Content input
-        content = st.text_area("Paste your content here for analysis", height=300)
+        content = st.text_area("Paste your content here for analysis", height=300,
+                              placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  \"userId\": \"john.doe@company.com\",\n  ...\n}")
         
         if st.button("Analyze Content"):
             if content:
