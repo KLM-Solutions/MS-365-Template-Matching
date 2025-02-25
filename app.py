@@ -399,7 +399,7 @@ def main():
         
         # Content input with example placeholder
         content = st.text_area("Paste your content here for analysis", height=300,
-                              placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  \"userId\": \"john.doe@company.com\",\n  \"eventTime\": \"2025-02-25T08:30:15Z\",\n  \"country\": \"Belarus\",\n  \"ipAddress\": \"45.153.241.176\",\n  \"deviceType\": \"Windows 10\",\n  \"browser\": \"Chrome\",\n  \"status\": \"Successful\",\n  \"location\": \"Minsk\",\n  \"riskLevel\": \"High\"\n}\nLink to 365")
+                              placeholder="In m365-alerts Slack channel\nUNUSUAL SIGN IN (FOREIGN_COUNTRY)\nDU = 1810\n{\n  ..\n  ..(only paste this data) no extra\n  ..\n}\nLink to 365"
         
         if st.button("Analyze Content"):
             if content:
