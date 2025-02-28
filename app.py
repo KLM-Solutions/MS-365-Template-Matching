@@ -467,8 +467,10 @@ def main():
                             # Right column: Show the extracted content
                             with col2:
                                 st.markdown("### Analyzed Content")
-                                st.text_area("Alert type:", value=alert_type, height=50, disabled=True)
-                                st.text_area("Relevant portion of the alert:", value=relevant_content, height=150, disabled=True)
+                                if alert_type:  # Only show if alert_type is not empty
+                                    st.text_area("Alert type:", value=alert_type, height=50, disabled=True)
+                                if relevant_content:  # Only show if relevant_content is not empty
+                                    st.text_area("Relevant portion of the alert:", value=relevant_content, height=150, disabled=True)
                             
                             # Display the template content below the columns
                             display_template_content(template_from_db.get('template', ''))
@@ -565,7 +567,10 @@ def main():
                         # Right column: Show the extracted content
                         with col2:
                             st.markdown("### Analyzed Content")
-                            st.text_area("Relevant portion of the alert:", value=relevant_content, height=150, disabled=True)
+                            if relevant_content:  # Only show if relevant_content is not empty
+                                st.text_area("Relevant portion of the alert:", value=relevant_content, height=150, disabled=True)
+                            else:
+                                st.warning("No relevant content could be extracted from the alert.")
                         
                         # Display the template content below the columns
                         if final_match.get('template_content'):
